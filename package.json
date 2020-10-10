@@ -1,0 +1,24 @@
+{
+  "name": "twitter_blocked_users_search",
+  "version": "0.1.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "start": "node build/index.js",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ecto0310/twitter_blocked_users_search.git"
+  },
+  "author": "ecto0310",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ecto0310/twitter_blocked_users_search/issues"
+  },
+  "homepage": "https://github.com/ecto0310/twitter_blocked_users_search#readme",
+  "devDependencies": {
+    "@types/node": "^14.11.8",
+    "typescript": "^4.0.3"
+  }
+}
