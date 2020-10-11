@@ -5,6 +5,12 @@ type Task =
   // Verify account validity
   | {
     type: "authUserId"
+  }
+  // Fetch users at distance 1
+  | {
+    type: "fetchDis1Users";
+    direction: string;
+    cursor: string;
   };
 
 type State = {
@@ -12,10 +18,12 @@ type State = {
   authUserId: string;
   // Task queue
   tasks: Task[];
+  // List of users at distance 1
+  dis1UsersId: Set<string>;
 };
 
 let client: Twitter;
-let state: State; 
+let state: State;
 
 // Initialization phase
 export function init() {
@@ -48,6 +56,12 @@ async function progress() {
       await authUserId();
       return;
     }
+    // Fetch users at distance 1
+    case "fetchDis1Users": {
+      await sleep(60 * 1000);
+      await fetchDis1Users(task);
+      return;
+    }
   }
 }
 
@@ -55,4 +69,78 @@ async function progress() {
 async function authUserId() {
   const res = await client.get("account/verify_credentials", {});
   state.authUserId = res.id_str;
+  state.tasks.push({
+    type: "fetchDis1Users",
+    direction: "follow",
+    cursor: "-1"
+  });
+}
+
+// Fetch users at distance 1
+async function fetchDis1Users(task: Task) {
+  if (task.type !== "fetchDis1Users") {
+    throw new Error("Task mismatch");
+  }
+  // Fetch follow at distance 1
+  if (task.direction === "follow") {
+    const res = await client.get("friends/ids", {
+      user_id: state.authUserId,
+      cursor: task.cursor,
+      stringify_ids: "true",
+      count: "5000"
+    });
+
+    const ids: string[] = res.ids;
+    ids.forEach(id => state.dis1UsersId.add(id));
+
+    // End of fetch follow at distance 1
+    if (res.next_cursor_str === "0") {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follower",
+        cursor: "-1"
+      });
+    }
+    // Continue to fetch follow at distance 1
+    else {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follow",
+        cursor: res.next_cursor_str
+      });
+    }
+  }
+  // Fetch follower at distance 1
+  else if (task.direction === "follower") {
+    const res = await client.get("followers/ids", {
+      user_id: state.authUserId,
+      cursor: task.cursor,
+      stringify_ids: "true",
+      count: "5000"
+    });
+
+    const ids: string[] = res.ids;
+    ids.forEach(id => state.dis1UsersId.add(id));
+
+    // End of fetch follower at distance 1
+    if (res.next_cursor_str === "0") {
+    }
+    // Continue to fetch follower at distance 1
+    else {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follower",
+        cursor: res.next_cursor_str
+      });
+    }
+  }
+}
+
+// Sleep function
+function sleep(msec: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve();
+    }, msec);
+  });
 }
