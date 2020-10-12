@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import { config } from "dotenv";
 import Twitter from "twitter";
 
@@ -44,13 +45,15 @@ export function init() {
     consumer_secret: process.env["consumer_secret"]!,
     access_token_key: process.env["access_token"]!,
     access_token_secret: process.env["access_token_secret"]!
-  });
+  }); 
+  loadState();
 }
 
 // Main process
 export async function main() {
   while (state.tasks.length !== 0) {
     await progress();
+    saveState();
   }
   console.log("Succeed all process.");
 }
@@ -239,6 +242,54 @@ async function fetchDis2Users(task: Task) {
     }
     return;
   }
+}
+
+// Export format
+type SaveData = {
+  authUserId: string;
+  tasks: Task[];
+  errorTasks: Task[];
+  dis1UsersId: string[];
+  dis2UsersId: [string, string[]][];
+};
+
+// Load state
+function loadState() {
+  try {
+    let saveData: SaveData = JSON.parse(fs.readFileSync("data.json", { encoding: "utf8" }));
+    state = {
+      authUserId: saveData.authUserId,
+      tasks: saveData.tasks,
+      errorTasks: saveData.errorTasks,
+      dis1UsersId: new Set(saveData.dis1UsersId),
+      dis2UsersId: new Map(
+        saveData.dis2UsersId.map(([k, v]) => [k, new Set(v)])
+      )
+    };
+  } catch {
+    state = {
+      authUserId: "",
+      tasks: [{ type: "authUserId" }],
+      errorTasks: [],
+      dis1UsersId: new Set(),
+      dis2UsersId: new Map()
+    };
+  }
+}
+
+// Save state
+function saveState() {
+  let saveData: SaveData = {
+    authUserId: state.authUserId,
+    tasks: state.tasks,
+    errorTasks: state.errorTasks,
+    dis1UsersId: Array.from(state.dis1UsersId),
+    dis2UsersId: Array.from(state.dis2UsersId).map(([k, v]) => [
+      k,
+      Array.from(v)
+    ])
+  };
+  fs.writeFileSync("data.json", JSON.stringify(saveData));
 }
 
 // Sleep function
