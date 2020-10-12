@@ -1,7 +1,41 @@
+import * as fs from "fs";
 import { config } from "dotenv";
 import Twitter from "twitter";
 
+type Task =
+  // Verify account validity
+  | {
+    type: "authUserId"
+  }
+  // Fetch users at distance 1
+  | {
+    type: "fetchDis1Users";
+    direction: string;
+    cursor: string;
+  }
+  // Fetch users at distance 2
+  | {
+    type: "fetchDis2Users";
+    direction: string;
+    id: string,
+    cursor: string;
+  };
+
+type State = {
+  // Authenticated User
+  authUserId: string;
+  // Task queue
+  tasks: Task[];
+  // List of error tasks
+  errorTasks: Task[];
+  // List of users at distance 1
+  dis1UsersId: Set<string>;
+  // List of users at distance 2
+  dis2UsersId: Map<string, Set<string>>;
+};
+
 let client: Twitter;
+let state: State;
 
 // Initialization phase
 export function init() {
@@ -11,5 +45,258 @@ export function init() {
     consumer_secret: process.env["consumer_secret"]!,
     access_token_key: process.env["access_token"]!,
     access_token_secret: process.env["access_token_secret"]!
+  }); 
+  loadState();
+}
+
+// Main process
+export async function main() {
+  while (state.tasks.length !== 0) {
+    await progress();
+    saveState();
+  }
+  console.log("Succeed all process.");
+}
+
+// Process
+async function progress() {
+  const task = state.tasks.shift();
+  if (task === undefined) {
+    throw new Error("Tasks is empty");
+  }
+  switch (task.type) {
+    // Verify account validity
+    case "authUserId": {
+      await authUserId();
+      return;
+    }
+    // Fetch users at distance 1
+    case "fetchDis1Users": {
+      await sleep(60 * 1000);
+      await fetchDis1Users(task);
+      return;
+    }
+    // Fetch users at distance 2
+    case "fetchDis2Users": {
+      await sleep(60 * 1000);
+      await fetchDis2Users(task);
+      return;
+    }
+  }
+}
+
+// Verify account validity
+async function authUserId() {
+  const res = await client.get("account/verify_credentials", {});
+  state.authUserId = res.id_str;
+  state.tasks.push({
+    type: "fetchDis1Users",
+    direction: "follow",
+    cursor: "-1"
+  });
+}
+
+// Fetch users at distance 1
+async function fetchDis1Users(task: Task) {
+  if (task.type !== "fetchDis1Users") {
+    throw new Error("Task mismatch");
+  }
+  // Fetch follow at distance 1
+  if (task.direction === "follow") {
+    const res = await client.get("friends/ids", {
+      user_id: state.authUserId,
+      cursor: task.cursor,
+      stringify_ids: "true",
+      count: "5000"
+    });
+
+    const ids: string[] = res.ids;
+    ids.forEach(id => state.dis1UsersId.add(id));
+
+    // End of fetch follow at distance 1
+    if (res.next_cursor_str === "0") {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follower",
+        cursor: "-1"
+      });
+    }
+    // Continue to fetch follow at distance 1
+    else {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follow",
+        cursor: res.next_cursor_str
+      });
+    }
+  }
+  // Fetch follower at distance 1
+  else if (task.direction === "follower") {
+    const res = await client.get("followers/ids", {
+      user_id: state.authUserId,
+      cursor: task.cursor,
+      stringify_ids: "true",
+      count: "5000"
+    });
+
+    const ids: string[] = res.ids;
+    ids.forEach(id => state.dis1UsersId.add(id));
+
+    // End of fetch follower at distance 1
+    if (res.next_cursor_str === "0") {
+      state.dis1UsersId.forEach(id => state.tasks.unshift({
+        type: "fetchDis2Users",
+        direction: "follow",
+        id: id,
+        cursor: "-1"
+      }));
+    }
+    // Continue to fetch follower at distance 1
+    else {
+      state.tasks.unshift({
+        type: "fetchDis1Users",
+        direction: "follower",
+        cursor: res.next_cursor_str
+      });
+    }
+  }
+}
+
+// Fetch users at distance 2
+async function fetchDis2Users(task: Task) {
+  if (task.type !== "fetchDis2Users") {
+    throw new Error("Task mismatch");
+  }
+  try {
+    // Fetch follow at distance 1
+    if (task.direction === "follow") {
+      const res = await client.get("friends/ids", {
+        user_id: task.id,
+        cursor: task.cursor,
+        stringify_ids: "true",
+        count: "5000"
+      });
+
+      const ids: string[] = res.ids;
+      let users = new Set<string>();
+      if (state.dis2UsersId.get(task.id) !== undefined) {
+        users = state.dis2UsersId.get(task.id)!;
+      }
+      ids.forEach(id => users.add(id));
+      state.dis2UsersId.set(task.id, users);
+
+      // End of fetch follow at distance 2
+      if (res.next_cursor_str === "0") {
+        state.tasks.unshift({
+          type: "fetchDis2Users",
+          direction: "follower",
+          id: task.id,
+          cursor: "-1"
+        });
+      }
+      // Continue to fetch follow at distance 2
+      else {
+        state.tasks.unshift({
+          type: "fetchDis2Users",
+          direction: "follow",
+          id: task.id,
+          cursor: res.next_cursor_str
+        });
+      }
+    }
+    // Fetch follower at distance 2
+    else if (task.direction === "follower") {
+      const res = await client.get("followers/ids", {
+        user_id: task.id,
+        cursor: task.cursor,
+        stringify_ids: "true",
+        count: "5000"
+      });
+
+      const ids: string[] = res.ids;
+      let users = new Set<string>();
+      if (state.dis2UsersId.get(task.id) !== undefined) {
+        users = state.dis2UsersId.get(task.id)!;
+      }
+      ids.forEach(id => users.add(id));
+      state.dis2UsersId.set(task.id, users);
+
+      // End of fetch follower at distance 2
+      if (res.next_cursor_str === "0") {
+      }
+      // Continue to fetch follower at distance 2
+      else {
+        state.tasks.unshift({
+          type: "fetchDis2Users",
+          direction: "follower",
+          id: task.id,
+          cursor: res.next_cursor_str
+        });
+      }
+    }
+    // Error handling
+  } catch (e) {
+    state.errorTasks.push(task);
+    if (state.dis2UsersId.get(task.id) !== undefined) {
+      state.dis2UsersId.set(task.id, new Set<string>());
+    }
+    return;
+  }
+}
+
+// Export format
+type SaveData = {
+  authUserId: string;
+  tasks: Task[];
+  errorTasks: Task[];
+  dis1UsersId: string[];
+  dis2UsersId: [string, string[]][];
+};
+
+// Load state
+function loadState() {
+  try {
+    let saveData: SaveData = JSON.parse(fs.readFileSync("data.json", { encoding: "utf8" }));
+    state = {
+      authUserId: saveData.authUserId,
+      tasks: saveData.tasks,
+      errorTasks: saveData.errorTasks,
+      dis1UsersId: new Set(saveData.dis1UsersId),
+      dis2UsersId: new Map(
+        saveData.dis2UsersId.map(([k, v]) => [k, new Set(v)])
+      )
+    };
+  } catch {
+    state = {
+      authUserId: "",
+      tasks: [{ type: "authUserId" }],
+      errorTasks: [],
+      dis1UsersId: new Set(),
+      dis2UsersId: new Map()
+    };
+  }
+}
+
+// Save state
+function saveState() {
+  let saveData: SaveData = {
+    authUserId: state.authUserId,
+    tasks: state.tasks,
+    errorTasks: state.errorTasks,
+    dis1UsersId: Array.from(state.dis1UsersId),
+    dis2UsersId: Array.from(state.dis2UsersId).map(([k, v]) => [
+      k,
+      Array.from(v)
+    ])
+  };
+  fs.writeFileSync("data.json", JSON.stringify(saveData));
+}
+
+// Sleep function
+function sleep(msec: number): Promise<void> {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve();
+    }, msec);
   });
 }

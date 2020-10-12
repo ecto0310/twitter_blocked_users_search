@@ -1,3 +1,14 @@
-import { init } from "./lib";
+import { init, main } from "./lib";
 
-init();
+(async () => {
+  let finish = false;
+  while (!finish) {
+    try {
+      init();
+      await main();
+      finish = true;
+    } catch (e) {
+      console.log(e);
+    }
+  }
+})();
