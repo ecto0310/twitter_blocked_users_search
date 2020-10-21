@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "dotenv": "^8.2.0",
+    "fp-ts": "^2.8.4",
     "twitter": "^1.7.1"
   }
 }

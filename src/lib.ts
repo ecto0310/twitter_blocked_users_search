@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { chunksOf } from 'fp-ts/Array'
 import { config } from "dotenv";
 import Twitter from "twitter";
 
@@ -19,6 +20,15 @@ type Task =
     direction: string;
     id: string,
     cursor: string;
+  }
+  // End of to fetch users
+  | {
+    type: "endFetchUsers";
+  }
+  // Check blocked
+  | {
+    type: "checkBlocked";
+    ids: string[];
   };
 
 type State = {
@@ -45,7 +55,7 @@ export function init() {
     consumer_secret: process.env["consumer_secret"]!,
     access_token_key: process.env["access_token"]!,
     access_token_secret: process.env["access_token_secret"]!
-  }); 
+  });
   loadState();
 }
 
@@ -82,6 +92,11 @@ async function progress() {
       await fetchDis2Users(task);
       return;
     }
+    // End of to fetch users
+    case "endFetchUsers": {
+      endFetchUsers();
+      return;
+    }
   }
 }
 
@@ -94,6 +109,7 @@ async function authUserId() {
     direction: "follow",
     cursor: "-1"
   });
+  state.tasks.push({ type: "endFetchUsers" });
 }
 
 // Fetch users at distance 1
@@ -242,6 +258,18 @@ async function fetchDis2Users(task: Task) {
     }
     return;
   }
+}
+
+// End of to fetch users
+function endFetchUsers() {
+  let users = new Set<string>();
+  state.dis2UsersId.forEach(s => s.forEach(t => users.add(t)));
+  chunksOf(100)(Array.from(users)).forEach(chunks => {
+    state.tasks.unshift({
+      type: "checkBlocked",
+      ids: chunks
+    });
+  });
 }
 
 // Export format
