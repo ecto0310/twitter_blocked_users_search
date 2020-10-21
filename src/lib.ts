@@ -29,7 +29,12 @@ type Task =
   | {
     type: "checkBlocked";
     ids: string[];
+  }
+  // End of to check blocked
+  | {
+    type: "endCheckBlocked"
   };
+
 
 type User = {
   id: string;
@@ -112,6 +117,11 @@ async function progress() {
       checkBlocked(task);
       return;
     }
+    // End of to check blocked
+    case "endCheckBlocked": {
+      endCheckBlocked();
+      return;
+    }
   }
 }
 
@@ -125,6 +135,7 @@ async function authUserId() {
     cursor: "-1"
   });
   state.tasks.push({ type: "endFetchUsers" });
+  state.tasks.push({ type: "endCheckBlocked" });
 }
 
 // Fetch users at distance 1
@@ -311,6 +322,18 @@ async function checkBlocked(task: Task) {
         friend: []
       });
     }
+  });
+}
+
+// End of to check blocked
+function endCheckBlocked() {
+  state.blockedUsers.forEach(user => {
+    state.dis2UsersId.forEach((friends, id) => {
+      if (friends.has(user.id)) {
+        user.friend.push(id);
+      }
+    });
+    state.blockedUsers.set(user.id, user);
   });
 }
 
