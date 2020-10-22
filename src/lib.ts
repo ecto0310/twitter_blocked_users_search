@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { chunksOf } from 'fp-ts/Array'
 import { config } from "dotenv";
 import Twitter from "twitter";
 
@@ -19,11 +20,34 @@ type Task =
     direction: string;
     id: string,
     cursor: string;
+  }
+  // End of to fetch users
+  | {
+    type: "endFetchUsers";
+  }
+  // Check blocked
+  | {
+    type: "checkBlocked";
+    ids: string[];
+  }
+  // End of to check blocked
+  | {
+    type: "endCheckBlocked"
   };
+
+
+type User = {
+  id: string;
+  name: string;
+  screen_name: string;
+  friend: string[];
+};
 
 type State = {
   // Authenticated User
   authUserId: string;
+  // List of blocked users
+  blockedUsers: Map<string, User>;
   // Task queue
   tasks: Task[];
   // List of error tasks
@@ -45,7 +69,7 @@ export function init() {
     consumer_secret: process.env["consumer_secret"]!,
     access_token_key: process.env["access_token"]!,
     access_token_secret: process.env["access_token_secret"]!
-  }); 
+  });
   loadState();
 }
 
@@ -82,6 +106,22 @@ async function progress() {
       await fetchDis2Users(task);
       return;
     }
+    // End of to fetch users
+    case "endFetchUsers": {
+      endFetchUsers();
+      return;
+    }
+    // Check blocked
+    case "checkBlocked": {
+      await sleep(1 * 1000);
+      checkBlocked(task);
+      return;
+    }
+    // End of to check blocked
+    case "endCheckBlocked": {
+      endCheckBlocked();
+      return;
+    }
   }
 }
 
@@ -94,6 +134,8 @@ async function authUserId() {
     direction: "follow",
     cursor: "-1"
   });
+  state.tasks.push({ type: "endFetchUsers" });
+  state.tasks.push({ type: "endCheckBlocked" });
 }
 
 // Fetch users at distance 1
@@ -244,9 +286,61 @@ async function fetchDis2Users(task: Task) {
   }
 }
 
+// End of to fetch users
+function endFetchUsers() {
+  let users = new Set<string>();
+  state.dis2UsersId.forEach(s => s.forEach(t => users.add(t)));
+  chunksOf(100)(Array.from(users)).forEach(chunks => {
+    state.tasks.unshift({
+      type: "checkBlocked",
+      ids: chunks
+    });
+  });
+}
+
+// Check blocked
+async function checkBlocked(task: Task) {
+  if (task.type !== "checkBlocked") {
+    throw new Error("Task mismatch");
+  }
+  const res = await client.get("users/lookup", {
+    user_id: task.ids.join(","),
+    include_blocked_by: "true"
+  });
+  const users: {
+    id_str: string;
+    name: string;
+    screen_name: string;
+    blocked_by: boolean;
+  }[] = res as any;
+  users.forEach(user => {
+    if (user.blocked_by) {
+      state.blockedUsers.set(user.id_str, {
+        id: user.id_str,
+        name: user.name,
+        screen_name: user.screen_name,
+        friend: []
+      });
+    }
+  });
+}
+
+// End of to check blocked
+function endCheckBlocked() {
+  state.blockedUsers.forEach(user => {
+    state.dis2UsersId.forEach((friends, id) => {
+      if (friends.has(user.id)) {
+        user.friend.push(id);
+      }
+    });
+    state.blockedUsers.set(user.id, user);
+  });
+}
+
 // Export format
 type SaveData = {
   authUserId: string;
+  blockedUsers: [string, User][];
   tasks: Task[];
   errorTasks: Task[];
   dis1UsersId: string[];
@@ -259,6 +353,9 @@ function loadState() {
     let saveData: SaveData = JSON.parse(fs.readFileSync("data.json", { encoding: "utf8" }));
     state = {
       authUserId: saveData.authUserId,
+      blockedUsers: new Map(
+        saveData.blockedUsers.map(([k, v]) => [k, v])
+      ),
       tasks: saveData.tasks,
       errorTasks: saveData.errorTasks,
       dis1UsersId: new Set(saveData.dis1UsersId),
@@ -269,6 +366,7 @@ function loadState() {
   } catch {
     state = {
       authUserId: "",
+      blockedUsers: new Map(),
       tasks: [{ type: "authUserId" }],
       errorTasks: [],
       dis1UsersId: new Set(),
@@ -281,6 +379,7 @@ function loadState() {
 function saveState() {
   let saveData: SaveData = {
     authUserId: state.authUserId,
+    blockedUsers: Array.from(state.blockedUsers).map(([k, v]) => [k, v]),
     tasks: state.tasks,
     errorTasks: state.errorTasks,
     dis1UsersId: Array.from(state.dis1UsersId),
