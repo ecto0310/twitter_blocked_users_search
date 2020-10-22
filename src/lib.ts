@@ -2,6 +2,7 @@ import * as fs from "fs";
 import { chunksOf } from 'fp-ts/Array'
 import { config } from "dotenv";
 import Twitter from "twitter";
+import * as readline from "readline"
 
 type Task =
   // Verify account validity
@@ -56,6 +57,10 @@ type State = {
   dis1UsersId: Set<string>;
   // List of users at distance 2
   dis2UsersId: Map<string, Set<string>>;
+  // Bar number
+  barNumber: NodeJS.Timeout | null;
+  // Bar count
+  barCount: number;
 };
 
 let client: Twitter;
@@ -71,6 +76,22 @@ export function init() {
     access_token_secret: process.env["access_token_secret"]!
   });
   loadState();
+  state.barNumber = setInterval(progressBar, 1000);
+}
+
+// Display progress bar
+function progressBar() {
+  state.barCount = (state.barCount + 1) % 4;
+  readline.clearLine(process.stdout, 0);
+  if (state.tasks.length === 0)
+  {
+    console.log("Succeed all process.\r");
+    clearInterval(state.barNumber!);
+  }
+  else
+  {
+    process.stdout.write("Running tasks..." + "|/-\\".charAt(state.barCount) + " (Remaining tasks: " + state.tasks.length + ")\r");
+  }
 }
 
 // Main process
@@ -79,7 +100,6 @@ export async function main() {
     await progress();
     saveState();
   }
-  console.log("Succeed all process.");
 }
 
 // Process
@@ -361,7 +381,9 @@ function loadState() {
       dis1UsersId: new Set(saveData.dis1UsersId),
       dis2UsersId: new Map(
         saveData.dis2UsersId.map(([k, v]) => [k, new Set(v)])
-      )
+      ),
+      barNumber: null,
+      barCount: 0
     };
   } catch {
     state = {
@@ -370,7 +392,9 @@ function loadState() {
       tasks: [{ type: "authUserId" }],
       errorTasks: [],
       dis1UsersId: new Set(),
-      dis2UsersId: new Map()
+      dis2UsersId: new Map(),
+      barNumber: null,
+      barCount: 0
     };
   }
 }
