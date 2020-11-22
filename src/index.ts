@@ -1,4 +1,4 @@
-import { init, main } from "./lib";
+import { init, main, sleep } from "./lib";
 
 (async () => {
   let finish = false;
@@ -9,6 +9,7 @@ import { init, main } from "./lib";
       finish = true;
     } catch (e) {
       console.log(e);
+      await sleep(60 * 1000);
     }
   }
 })();
