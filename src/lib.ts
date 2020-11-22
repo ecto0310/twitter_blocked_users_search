@@ -61,6 +61,8 @@ type State = {
   barNumber: NodeJS.Timeout | null;
   // Bar count
   barCount: number;
+  // Rerun flag
+  rerun: boolean;
 };
 
 let client: Twitter;
@@ -76,6 +78,7 @@ export function init() {
     access_token_secret: process.env["access_token_secret"]!
   });
   loadState();
+  state.tasks.unshift({ type: "authUserId" });
   state.barNumber = setInterval(progressBar, 1000);
 }
 
@@ -83,13 +86,11 @@ export function init() {
 function progressBar() {
   state.barCount = (state.barCount + 1) % 4;
   readline.clearLine(process.stdout, 0);
-  if (state.tasks.length === 0)
-  {
+  if (state.tasks.length === 0) {
     console.log("Succeed all process.\r");
     clearInterval(state.barNumber!);
   }
-  else
-  {
+  else {
     process.stdout.write("Running tasks..." + "|/-\\".charAt(state.barCount) + " (Remaining tasks: " + state.tasks.length + ")\r");
   }
 }
@@ -148,14 +149,13 @@ async function progress() {
 // Verify account validity
 async function authUserId() {
   const res = await client.get("account/verify_credentials", {});
+  if (state.rerun) {
+    if (state.authUserId !== res.id_str) {
+      console.log("Data file does not match the user.");
+      process.exit(0);
+    }
+  }
   state.authUserId = res.id_str;
-  state.tasks.push({
-    type: "fetchDis1Users",
-    direction: "follow",
-    cursor: "-1"
-  });
-  state.tasks.push({ type: "endFetchUsers" });
-  state.tasks.push({ type: "endCheckBlocked" });
 }
 
 // Fetch users at distance 1
@@ -383,18 +383,28 @@ function loadState() {
         saveData.dis2UsersId.map(([k, v]) => [k, new Set(v)])
       ),
       barNumber: null,
-      barCount: 0
+      barCount: 0,
+      rerun: true
     };
   } catch {
     state = {
       authUserId: "",
       blockedUsers: new Map(),
-      tasks: [{ type: "authUserId" }],
+      tasks: [
+        {
+          type: "fetchDis1Users",
+          direction: "follow",
+          cursor: "-1"
+        },
+        { type: "endFetchUsers" },
+        { type: "endCheckBlocked" }
+      ],
       errorTasks: [],
       dis1UsersId: new Set(),
       dis2UsersId: new Map(),
       barNumber: null,
-      barCount: 0
+      barCount: 0,
+      rerun: false
     };
   }
 }
