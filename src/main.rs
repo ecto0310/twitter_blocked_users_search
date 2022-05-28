@@ -21,4 +21,7 @@ fn main() {
     );
 
     let task = task::Task::new(twitter, 2);
+    task.init();
+    task.run();
+    task.result();
 }

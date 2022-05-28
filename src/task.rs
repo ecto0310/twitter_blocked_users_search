@@ -12,6 +12,10 @@ impl Task {
             status: Status::new(limit_distance),
         }
     }
+
+    pub fn init(&self) {}
+    pub fn run(&self) {}
+    pub fn result(&self) {}
 }
 
 struct Status {
