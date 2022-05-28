@@ -103,6 +103,33 @@ impl Twitter {
         endpoint: &str,
         parameters: Vec<(&str, &str)>,
     ) -> String {
-        "".to_string()
+        let key: String = format!(
+            "{}&{}",
+            percent_encoding::utf8_percent_encode(&self.consumer_secret, &Self::FRAGMENT),
+            percent_encoding::utf8_percent_encode(&self.access_token_secret, &Self::FRAGMENT)
+        );
+
+        let mut parameters = parameters;
+        parameters.sort();
+        let parameters = parameters
+            .into_iter()
+            .map(|(k, v)| {
+                format!(
+                    "{}={}",
+                    percent_encoding::utf8_percent_encode(k, &Self::FRAGMENT),
+                    percent_encoding::utf8_percent_encode(v, &Self::FRAGMENT)
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("&");
+        let message = format!(
+            "{}&{}&{}",
+            percent_encoding::utf8_percent_encode(method, &Self::FRAGMENT),
+            percent_encoding::utf8_percent_encode(endpoint, &Self::FRAGMENT),
+            percent_encoding::utf8_percent_encode(&parameters, &Self::FRAGMENT)
+        );
+
+        let signature = hmacsha1::hmac_sha1(key.as_bytes(), message.as_bytes());
+        base64::encode(signature)
     }
 }
