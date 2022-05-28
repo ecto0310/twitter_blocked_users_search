@@ -1,6 +1,7 @@
 use dotenv::dotenv;
 use std::env;
 
+mod task;
 mod twitter;
 
 fn main() {
@@ -18,4 +19,6 @@ fn main() {
         access_token,
         access_token_secret,
     );
+
+    let task = task::Task::new(twitter, 2);
 }
