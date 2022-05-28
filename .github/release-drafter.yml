@@ -1,0 +1,39 @@
+name-template: 'v$NEXT_PATCH_VERSION'
+tag-template: 'v$NEXT_PATCH_VERSION'
+categories:
+  - title: '🚀 Features'
+    labels: 'feature'
+  - title: '🐛 Bug Fixes'
+    labels: 'bug'
+  - title: '🔧 Refactoring'
+    label: 'refactor'
+  - title: '📖 Documentation'
+    label: 'documentation'
+  - title: '⛓️ Dependency update'
+    label: 'dependencies'
+
+template: |
+  ## Changes
+  
+  $CHANGES
+autolabeler:
+  - label: feature
+    branch:
+      - '/^feature.+/'
+  - label: bug
+    branch:
+      - '/^fix.+/'
+  - label: refactor
+    branch:
+      - '/^refactor.+/'
+  - label: documentation
+    branch:
+      - '/docs.+/'
+    files:
+      - '*.md'
+  - label: github
+    files:
+      - '.github/**/*'
+  - label: dependencies
+    branch:
+      - '/^renovate.+/'
