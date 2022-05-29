@@ -32,8 +32,86 @@ impl Task {
                 distance: 0,
             }));
     }
-    pub fn run(&self) {}
+
+    pub fn run(&mut self) {
+        self.fetch()
+    }
     pub fn result(&self) {}
+
+    fn fetch(&mut self) {
+        while 0 < self.status.fetch_queue.len() {
+            let command = self.status.fetch_queue.pop_front().unwrap();
+            match command {
+                Fetch::Follow(data) => self.fetch_follow(data),
+                Fetch::Follower(data) => self.fetch_follower(data),
+            }
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+    }
+
+    fn fetch_follow(&mut self, data: FetchStatus) {
+        if self.status.users[&data.id].distance != data.distance {
+            return;
+        }
+        let mut parameters: Vec<(&str, &str)> = Vec::new();
+        parameters.push(("user_id", &data.id));
+        parameters.push(("cursor", &data.cursor));
+        parameters.push(("stringify_ids", "true"));
+        parameters.push(("count", "5000"));
+        let res = self.twitter.get("friends/ids", parameters);
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return;
+        }
+        let mut res_json = res.json::<serde_json::Value>().unwrap();
+        let next = res_json["next_cursor_str"].as_str().unwrap();
+        if next == "0" {
+            self.status
+                .fetch_queue
+                .push_front(Fetch::Follower(FetchStatus {
+                    id: data.id.clone(),
+                    cursor: String::from("-1"),
+                    distance: data.distance,
+                }));
+        } else {
+            self.status
+                .fetch_queue
+                .push_front(Fetch::Follow(FetchStatus {
+                    id: data.id.clone(),
+                    cursor: next.to_string(),
+                    distance: data.distance,
+                }));
+        }
+        if data.distance + 1 <= self.status.limit_distance {
+            for user in res_json["ids"].as_array_mut().unwrap() {
+                let id = &user.as_str().unwrap().to_string();
+                if !self.status.users.contains_key(id) {
+                    self.status.users.insert(
+                        id.clone(),
+                        User {
+                            distance: data.distance + 1,
+                            edge: std::collections::HashSet::new(),
+                        },
+                    );
+                    self.status
+                        .fetch_queue
+                        .push_back(Fetch::Follow(FetchStatus {
+                            id: id.clone(),
+                            cursor: String::from("-1"),
+                            distance: data.distance + 1,
+                        }));
+                }
+                if data.distance < self.status.users[id].distance {
+                    self.status
+                        .users
+                        .get_mut(id)
+                        .unwrap()
+                        .edge
+                        .insert(data.id.clone());
+                }
+            }
+        }
+    }
+    fn fetch_follower(&mut self, data: FetchStatus) {}
 }
 
 struct Status {
