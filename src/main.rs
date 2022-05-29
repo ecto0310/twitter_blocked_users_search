@@ -20,7 +20,7 @@ fn main() {
         access_token_secret,
     );
 
-    let task = task::Task::new(twitter, 2);
+    let mut task = task::Task::new(twitter, 2);
     task.init();
     task.run();
     task.result();
