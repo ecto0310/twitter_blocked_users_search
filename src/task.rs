@@ -18,20 +18,25 @@ impl Task {
         let res = self.twitter.get("account/verify_credentials", Vec::new());
         let res_json = res.json::<serde_json::Value>().unwrap();
         self.status.my_id = res_json["id_str"].as_str().unwrap().to_string();
-        self.status.users.insert(
-            self.status.my_id.clone(),
-            User {
-                distance: 0,
-                edge: std::collections::HashSet::new(),
-            },
-        );
-        self.status
-            .fetch_queue
-            .push_back(Fetch::Follow(FetchStatus {
-                id: self.status.my_id.clone(),
-                cursor: "-1".to_string(),
-                distance: 0,
-            }));
+        match Status::load(&self.status.my_id) {
+            Ok(status) => self.status = status,
+            Err(_) => {
+                self.status.users.insert(
+                    self.status.my_id.clone(),
+                    User {
+                        distance: 0,
+                        edge: std::collections::HashSet::new(),
+                    },
+                );
+                self.status
+                    .fetch_queue
+                    .push_back(Fetch::Follow(FetchStatus {
+                        id: self.status.my_id.clone(),
+                        cursor: "-1".to_string(),
+                        distance: 0,
+                    }));
+            }
+        }
     }
 
     pub fn run(&mut self) {
@@ -208,5 +213,12 @@ impl Status {
         let json = serde_json::to_string(&self).unwrap();
         let mut file = std::fs::File::create(format!("{}.json", self.my_id)).unwrap();
         file.write_all(json.as_bytes()).unwrap();
+    }
+
+    fn load(my_id: &String) -> Result<Status, std::io::Error> {
+        let file = std::fs::File::open(format!("{}.json", my_id))?;
+        let json = std::io::BufReader::new(file);
+        let data = serde_json::from_reader(json)?;
+        Ok(data)
     }
 }
