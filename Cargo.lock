@@ -822,6 +822,7 @@ dependencies = [
  "hmac-sha1",
  "percent-encoding",
  "reqwest",
+ "serde_json",
 ]
 
 [[package]]
