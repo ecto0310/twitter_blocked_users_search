@@ -81,17 +81,17 @@ impl Task {
                     distance: data.distance,
                 }));
         }
-        if data.distance + 1 <= self.status.limit_distance {
-            for user in res_json["ids"].as_array_mut().unwrap() {
-                let id = &user.as_str().unwrap().to_string();
-                if !self.status.users.contains_key(id) {
-                    self.status.users.insert(
-                        id.clone(),
-                        User {
-                            distance: data.distance + 1,
-                            edge: std::collections::HashSet::new(),
-                        },
-                    );
+        for user in res_json["ids"].as_array_mut().unwrap() {
+            let id = &user.as_str().unwrap().to_string();
+            if !self.status.users.contains_key(id) {
+                self.status.users.insert(
+                    id.clone(),
+                    User {
+                        distance: data.distance + 1,
+                        edge: std::collections::HashSet::new(),
+                    },
+                );
+                if data.distance + 1 < self.status.limit_distance {
                     self.status
                         .fetch_queue
                         .push_back(Fetch::Follow(FetchStatus {
@@ -100,14 +100,14 @@ impl Task {
                             distance: data.distance + 1,
                         }));
                 }
-                if data.distance < self.status.users[id].distance {
-                    self.status
-                        .users
-                        .get_mut(id)
-                        .unwrap()
-                        .edge
-                        .insert(data.id.clone());
-                }
+            }
+            if data.distance < self.status.users[id].distance {
+                self.status
+                    .users
+                    .get_mut(id)
+                    .unwrap()
+                    .edge
+                    .insert(data.id.clone());
             }
         }
     }
@@ -133,17 +133,17 @@ impl Task {
                     distance: data.distance,
                 }));
         }
-        if data.distance + 1 <= self.status.limit_distance {
-            for user in res_json["ids"].as_array_mut().unwrap() {
-                let id = &user.as_str().unwrap().to_string();
-                if !self.status.users.contains_key(id) {
-                    self.status.users.insert(
-                        id.clone(),
-                        User {
-                            distance: data.distance + 1,
-                            edge: std::collections::HashSet::new(),
-                        },
-                    );
+        for user in res_json["ids"].as_array_mut().unwrap() {
+            let id = &user.as_str().unwrap().to_string();
+            if !self.status.users.contains_key(id) {
+                self.status.users.insert(
+                    id.clone(),
+                    User {
+                        distance: data.distance + 1,
+                        edge: std::collections::HashSet::new(),
+                    },
+                );
+                if data.distance + 1 < self.status.limit_distance {
                     self.status
                         .fetch_queue
                         .push_back(Fetch::Follow(FetchStatus {
@@ -152,14 +152,14 @@ impl Task {
                             distance: data.distance + 1,
                         }));
                 }
-                if data.distance < self.status.users[id].distance {
-                    self.status
-                        .users
-                        .get_mut(id)
-                        .unwrap()
-                        .edge
-                        .insert(data.id.clone());
-                }
+            }
+            if data.distance < self.status.users[id].distance {
+                self.status
+                    .users
+                    .get_mut(id)
+                    .unwrap()
+                    .edge
+                    .insert(data.id.clone());
             }
         }
     }
