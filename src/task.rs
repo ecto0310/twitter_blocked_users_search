@@ -1,4 +1,5 @@
 use super::twitter;
+use std::io::Write;
 
 pub struct Task {
     twitter: twitter::Twitter,
@@ -45,6 +46,7 @@ impl Task {
                 Fetch::Follow(data) => self.fetch_follow(data),
                 Fetch::Follower(data) => self.fetch_follower(data),
             }
+            self.status.save();
             std::thread::sleep(std::time::Duration::from_secs(60));
         }
     }
@@ -165,6 +167,7 @@ impl Task {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct Status {
     limit_distance: i32,
     my_id: String,
@@ -172,17 +175,20 @@ struct Status {
     users: std::collections::HashMap<String, User>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 enum Fetch {
     Follow(FetchStatus),
     Follower(FetchStatus),
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct FetchStatus {
     id: String,
     cursor: String,
     distance: i32,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 struct User {
     distance: i32,
     edge: std::collections::HashSet<String>,
@@ -196,5 +202,11 @@ impl Status {
             fetch_queue: std::collections::VecDeque::new(),
             users: std::collections::HashMap::new(),
         }
+    }
+
+    fn save(&self) {
+        let json = serde_json::to_string(&self).unwrap();
+        let mut file = std::fs::File::create(format!("{}.json", self.my_id)).unwrap();
+        file.write_all(json.as_bytes()).unwrap();
     }
 }
