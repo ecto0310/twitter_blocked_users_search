@@ -66,7 +66,13 @@ impl Task {
         }
     }
 
-    fn check(&self) {}
+    fn check(&mut self) {
+        while 0 < self.status.remaining_users.len() {
+            self.check_users();
+            self.status.save();
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    }
 
     fn fetch_follow(&mut self, data: FetchStatus) {
         if self.status.users[&data.id].distance != data.distance {
@@ -180,6 +186,28 @@ impl Task {
                     .edge
                     .insert(data.id.clone());
             }
+        }
+    }
+
+    fn check_users(&mut self) {
+        let mut params: Vec<(&str, &str)> = Vec::new();
+        let request_length = std::cmp::min(100, self.status.remaining_users.len());
+        let users: Vec<String> = self
+            .status
+            .remaining_users
+            .drain(0..request_length)
+            .collect();
+        let users_string = users.join(",");
+        params.push(("user_id", &users_string));
+        params.push(("include_blocked_by", "true"));
+        let res = self.twitter.get("users/lookup", params);
+        let mut res_json = res.json::<serde_json::Value>().unwrap();
+        for user in res_json.as_array_mut().unwrap() {
+            let id = user["id_str"].as_str().unwrap().to_string();
+            if user["blocked_by"].as_bool().unwrap() {
+                self.status.blocked_users.push(id.clone());
+            }
+            self.status.checked_users.push(id.clone());
         }
     }
 }
