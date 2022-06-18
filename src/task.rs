@@ -24,6 +24,7 @@ impl Task {
                 self.status.users.insert(
                     self.status.my_id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: 0,
                         edge: std::collections::HashSet::new(),
                     },
@@ -112,6 +113,7 @@ impl Task {
                 self.status.users.insert(
                     id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: data.distance + 1,
                         edge: std::collections::HashSet::new(),
                     },
@@ -164,6 +166,7 @@ impl Task {
                 self.status.users.insert(
                     id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: data.distance + 1,
                         edge: std::collections::HashSet::new(),
                     },
@@ -207,6 +210,8 @@ impl Task {
             if user["blocked_by"].as_bool().unwrap() {
                 self.status.blocked_users.push(id.clone());
             }
+            (*self.status.users.get_mut(&id).unwrap()).screen_name =
+                user["screen_name"].as_str().unwrap().to_string();
             self.status.checked_users.push(id.clone());
         }
     }
@@ -238,6 +243,7 @@ struct FetchStatus {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct User {
+    screen_name: String,
     distance: i32,
     edge: std::collections::HashSet<String>,
 }
