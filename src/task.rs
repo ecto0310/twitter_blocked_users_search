@@ -40,8 +40,18 @@ impl Task {
     }
 
     pub fn run(&mut self) {
-        self.fetch()
+        self.fetch();
+        if self.status.checked_users.len() == 0 {
+            self.status.remaining_users = self
+                .status
+                .users
+                .clone()
+                .into_keys()
+                .collect::<Vec<String>>();
+        }
+        self.check();
     }
+
     pub fn result(&self) {}
 
     fn fetch(&mut self) {
@@ -53,6 +63,14 @@ impl Task {
             }
             self.status.save();
             std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+    }
+
+    fn check(&mut self) {
+        while 0 < self.status.remaining_users.len() {
+            self.check_users();
+            self.status.save();
+            std::thread::sleep(std::time::Duration::from_secs(1));
         }
     }
 
@@ -170,30 +188,55 @@ impl Task {
             }
         }
     }
+
+    fn check_users(&mut self) {
+        let mut params: Vec<(&str, &str)> = Vec::new();
+        let request_length = std::cmp::min(100, self.status.remaining_users.len());
+        let users: Vec<String> = self
+            .status
+            .remaining_users
+            .drain(0..request_length)
+            .collect();
+        let users_string = users.join(",");
+        params.push(("user_id", &users_string));
+        params.push(("include_blocked_by", "true"));
+        let res = self.twitter.get("users/lookup", params);
+        let mut res_json = res.json::<serde_json::Value>().unwrap();
+        for user in res_json.as_array_mut().unwrap() {
+            let id = user["id_str"].as_str().unwrap().to_string();
+            if user["blocked_by"].as_bool().unwrap() {
+                self.status.blocked_users.push(id.clone());
+            }
+            self.status.checked_users.push(id.clone());
+        }
+    }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct Status {
     limit_distance: i32,
     my_id: String,
     fetch_queue: std::collections::VecDeque<Fetch>,
     users: std::collections::HashMap<String, User>,
+    remaining_users: Vec<String>,
+    checked_users: Vec<String>,
+    blocked_users: Vec<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 enum Fetch {
     Follow(FetchStatus),
     Follower(FetchStatus),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct FetchStatus {
     id: String,
     cursor: String,
     distance: i32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct User {
     distance: i32,
     edge: std::collections::HashSet<String>,
@@ -206,6 +249,9 @@ impl Status {
             my_id: String::new(),
             fetch_queue: std::collections::VecDeque::new(),
             users: std::collections::HashMap::new(),
+            remaining_users: Vec::new(),
+            checked_users: Vec::new(),
+            blocked_users: Vec::new(),
         }
     }
 
