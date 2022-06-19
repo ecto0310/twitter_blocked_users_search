@@ -53,7 +53,15 @@ impl Task {
         self.check();
     }
 
-    pub fn result(&self) {}
+    pub fn result(&self) {
+        println!(
+            "Blocked users graph({} users)",
+            self.status.blocked_users.len()
+        );
+        for user in &self.status.blocked_users {
+            self.result_view(user, 0);
+        }
+    }
 
     fn fetch(&mut self) {
         while 0 < self.status.fetch_queue.len() {
@@ -213,6 +221,19 @@ impl Task {
             (*self.status.users.get_mut(&id).unwrap()).screen_name =
                 user["screen_name"].as_str().unwrap().to_string();
             self.status.checked_users.push(id.clone());
+        }
+    }
+
+    fn result_view(&self, id: &String, depth: i32) {
+        println!(
+            "{}{} @{}({}) ",
+            "  ".repeat(depth as usize),
+            if depth == 0 { "-" } else { "L" },
+            self.status.users[id].screen_name,
+            id
+        );
+        for user in &self.status.users[id].edge {
+            self.result_view(user, depth + 1);
         }
     }
 }
