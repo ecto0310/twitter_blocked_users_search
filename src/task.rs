@@ -24,6 +24,7 @@ impl Task {
                 self.status.users.insert(
                     self.status.my_id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: 0,
                         edge: std::collections::HashSet::new(),
                     },
@@ -52,7 +53,15 @@ impl Task {
         self.check();
     }
 
-    pub fn result(&self) {}
+    pub fn result(&self) {
+        println!(
+            "Blocked users graph({} users)",
+            self.status.blocked_users.len()
+        );
+        for user in &self.status.blocked_users {
+            self.result_view(user, 0);
+        }
+    }
 
     fn fetch(&mut self) {
         while 0 < self.status.fetch_queue.len() {
@@ -112,6 +121,7 @@ impl Task {
                 self.status.users.insert(
                     id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: data.distance + 1,
                         edge: std::collections::HashSet::new(),
                     },
@@ -164,6 +174,7 @@ impl Task {
                 self.status.users.insert(
                     id.clone(),
                     User {
+                        screen_name: String::new(),
                         distance: data.distance + 1,
                         edge: std::collections::HashSet::new(),
                     },
@@ -207,7 +218,22 @@ impl Task {
             if user["blocked_by"].as_bool().unwrap() {
                 self.status.blocked_users.push(id.clone());
             }
+            (*self.status.users.get_mut(&id).unwrap()).screen_name =
+                user["screen_name"].as_str().unwrap().to_string();
             self.status.checked_users.push(id.clone());
+        }
+    }
+
+    fn result_view(&self, id: &String, depth: i32) {
+        println!(
+            "{}{} @{}({}) ",
+            "  ".repeat(depth as usize),
+            if depth == 0 { "-" } else { "L" },
+            self.status.users[id].screen_name,
+            id
+        );
+        for user in &self.status.users[id].edge {
+            self.result_view(user, depth + 1);
         }
     }
 }
@@ -238,6 +264,7 @@ struct FetchStatus {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct User {
+    screen_name: String,
     distance: i32,
     edge: std::collections::HashSet<String>,
 }
