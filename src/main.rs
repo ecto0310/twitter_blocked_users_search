@@ -3,6 +3,8 @@ mod twitter;
 
 fn main() {
     dotenv::dotenv().ok();
+    std::env::set_var("RUST_LOG", "info");
+    env_logger::init();
 
     let consummer_key = std::env::var("CONSUMER_KEY").expect("CONSUMMER_KEY must be set.");
     let consummer_secret = std::env::var("CONSUMER_SECRET").expect("CONSUMMER_SECRET must be set.");
