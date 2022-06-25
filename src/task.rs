@@ -15,12 +15,18 @@ impl Task {
     }
 
     pub fn init(&mut self) {
+        log::info!("Start initialize phase");
         let res = self.twitter.get("account/verify_credentials", Vec::new());
         let res_json = res.json::<serde_json::Value>().unwrap();
         self.status.my_id = res_json["id_str"].as_str().unwrap().to_string();
+        log::info!("Get user information on {}", &self.status.my_id);
         match Status::load(&self.status.my_id) {
-            Ok(status) => self.status = status,
+            Ok(status) => {
+                log::info!("Success to load file ");
+                self.status = status
+            }
             Err(_) => {
+                log::warn!("Failure to load file");
                 self.status.users.insert(
                     self.status.my_id.clone(),
                     User {
@@ -38,6 +44,7 @@ impl Task {
                     }));
             }
         }
+        log::info!("Finish initialize phase");
     }
 
     pub fn run(&mut self) {
@@ -64,7 +71,9 @@ impl Task {
     }
 
     fn fetch(&mut self) {
+        log::info!("Start to fetch phase");
         while 0 < self.status.fetch_queue.len() {
+            log::info!("Fetch queue size: {}", self.status.fetch_queue.len());
             let command = self.status.fetch_queue.pop_front().unwrap();
             match command {
                 Fetch::Follow(data) => self.fetch_follow(data),
@@ -73,20 +82,29 @@ impl Task {
             self.status.save();
             std::thread::sleep(std::time::Duration::from_secs(60));
         }
+        log::info!("Finish to fetch phase");
     }
 
     fn check(&mut self) {
+        log::info!("Start to check phase");
         while 0 < self.status.remaining_users.len() {
             self.check_users();
             self.status.save();
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
+        log::info!("Finish to check phase");
     }
 
     fn fetch_follow(&mut self, data: FetchStatus) {
         if self.status.users[&data.id].distance != data.distance {
             return;
         }
+        log::info!(
+            "Fetching follow (distance:{}, id:{}, cursor:{})",
+            data.distance,
+            data.id,
+            data.cursor
+        );
         let mut parameters: Vec<(&str, &str)> = Vec::new();
         parameters.push(("user_id", &data.id));
         parameters.push(("cursor", &data.cursor));
@@ -94,6 +112,11 @@ impl Task {
         parameters.push(("count", "5000"));
         let res = self.twitter.get("friends/ids", parameters);
         if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+            log::warn!(
+                "Cannot access user information (distance:{}, id:{})",
+                data.distance,
+                data.id
+            );
             return;
         }
         let mut res_json = res.json::<serde_json::Value>().unwrap();
@@ -148,6 +171,12 @@ impl Task {
     }
 
     fn fetch_follower(&mut self, data: FetchStatus) {
+        log::info!(
+            "Fetching follower (distance:{}, id:{}, cursor:{})",
+            data.distance,
+            data.id,
+            data.cursor
+        );
         let mut parameters: Vec<(&str, &str)> = Vec::new();
         parameters.push(("user_id", &data.id));
         parameters.push(("cursor", &data.cursor));
@@ -155,6 +184,11 @@ impl Task {
         parameters.push(("count", "5000"));
         let res = self.twitter.get("followers/ids", parameters);
         if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+            log::warn!(
+                "Cannot access user information (distance:{}, id:{})",
+                data.distance,
+                data.id
+            );
             return;
         }
         let mut res_json = res.json::<serde_json::Value>().unwrap();
@@ -201,6 +235,10 @@ impl Task {
     }
 
     fn check_users(&mut self) {
+        log::info!(
+            "Checking user (remaining count:{})",
+            self.status.remaining_users.len()
+        );
         let mut params: Vec<(&str, &str)> = Vec::new();
         let request_length = std::cmp::min(100, self.status.remaining_users.len());
         let users: Vec<String> = self
@@ -283,12 +321,14 @@ impl Status {
     }
 
     fn save(&self) {
+        log::info!("Saving file");
         let json = serde_json::to_string(&self).unwrap();
         let mut file = std::fs::File::create(format!("{}.json", self.my_id)).unwrap();
         file.write_all(json.as_bytes()).unwrap();
     }
 
     fn load(my_id: &String) -> Result<Status, std::io::Error> {
+        log::info!("Loading file");
         let file = std::fs::File::open(format!("{}.json", my_id))?;
         let json = std::io::BufReader::new(file);
         let data = serde_json::from_reader(json)?;
